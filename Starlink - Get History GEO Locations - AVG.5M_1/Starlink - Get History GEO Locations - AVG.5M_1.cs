@@ -40,9 +40,9 @@ namespace DSStarlinkGeoHistoryLocations
             IsRequired = true,
         };
 
+        private readonly List<GQIRow> listGqiRows = new List<GQIRow> { };
         private GQIDMS _dms;
         private string starlinkEnterpriseElement = String.Empty;
-        private List<GQIRow> listGqiRows = new List<GQIRow> { };
 
         public OnInitOutputArgs OnInit(OnInitInputArgs args)
         {
@@ -88,8 +88,7 @@ namespace DSStarlinkGeoHistoryLocations
                 ReturnAsObjects = true,
             };
 
-            GetTrendDataResponseMessage trendDataResponseMessage = _dms.SendMessage(trendMessage) as GetTrendDataResponseMessage;
-
+            var trendDataResponseMessage = _dms.SendMessage(trendMessage) as GetTrendDataResponseMessage;
             if (trendDataResponseMessage == null || trendDataResponseMessage.Records == null)
             {
                 return new OnArgumentsProcessedOutputArgs();
@@ -128,8 +127,11 @@ namespace DSStarlinkGeoHistoryLocations
 
         private void ProcessTrendResponseResult(GetTrendDataResponseMessage trendDataResponseMessage)
         {
-            var latitudeData = new List<double>();
+            // Dictionary to store Latitude and Longitude values by rounded timestamps
+            var latitudeDict = new Dictionary<DateTime, double>();
+            var longitudeDict = new Dictionary<DateTime, double>();
 
+            // Step 1: Collect Latitude Data
             foreach (var record in trendDataResponseMessage.Records)
             {
                 if (!record.Value.Any())
@@ -143,33 +145,46 @@ namespace DSStarlinkGeoHistoryLocations
                     {
                         if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == 5)
                         {
-                            latitudeData.Add(avgTimeData.AverageValue);
+                            DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
+                            latitudeDict[roundedTime] = avgTimeData.AverageValue;
                         }
                     }
                 }
-                else if (record.Key.StartsWith("1214")) // Longitude
-                {
-                    for (int i = 0; i < record.Value.Count; i++)
-                    {
-                        // sample the data 1 in 3.
-                        if (i % 3 > 0)
-                        {
-                            continue;
-                        }
+            }
 
+            // Step 2: Collect Longitude Data
+            foreach (var record in trendDataResponseMessage.Records)
+            {
+                if (!record.Value.Any())
+                {
+                    continue;
+                }
+
+                if (record.Key.StartsWith("1214")) // Longitude
+                {
+                    int samplingRate = (int)Math.Ceiling((double)record.Value.Count / 1000);  // Ensure max 1000 records
+
+                    for (int i = 0; i < record.Value.Count; i += samplingRate)
+                    {
                         if (record.Value[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == 5)
                         {
-                            double longitude = avgTimeData.AverageValue;
-                            double latitude = latitudeData[i];
-
-                            if (longitude == -1.0 || latitude == -1.0)
-                            {
-                                continue;
-                            }
-
-                            AddResultRow(i, avgTimeData.Time, latitude, longitude);
+                            DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
+                            longitudeDict[roundedTime] = avgTimeData.AverageValue;
                         }
                     }
+                }
+            }
+
+            // Step 3: Match Latitude & Longitude by Timestamps
+            var index = 0;
+            foreach (var time in longitudeDict.Keys.Where(latitudeDict.ContainsKey)) // Only matching timestamps
+            {
+                double latitude = latitudeDict[time];
+                double longitude = longitudeDict[time];
+
+                if (latitude != -1.0 && longitude != -1.0) // Ensure valid data
+                {
+                    AddResultRow(index++, time, latitude, longitude);
                 }
             }
 

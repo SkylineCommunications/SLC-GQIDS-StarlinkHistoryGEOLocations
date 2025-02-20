@@ -1,4 +1,4 @@
-namespace StarlinkGetHistoryGEOLocationsAVG5M_1
+namespace DSStarlinkGeoHistoryLocations
 {
     using System;
     using System.Collections.Generic;
@@ -20,7 +20,6 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
         , IGQIOnInit
         , IGQIInputArguments
     {
-
         private readonly GQIStringArgument starlinkEnterpriseElementIdArg = new GQIStringArgument("Starlink Enterprise Element ID")
         {
             IsRequired = true,
@@ -61,6 +60,7 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
                 timeSpanEndArgX,
             };
         }
+
         public OnArgumentsProcessedOutputArgs OnArgumentsProcessed(OnArgumentsProcessedInputArgs args)
         {
             var starttime = args.GetArgumentValue(timeSpanStartArgX);
@@ -100,7 +100,27 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
             return new OnArgumentsProcessedOutputArgs();
         }
 
-        DateTime RoundToNearest5Min(DateTime time)
+        public GQIColumn[] GetColumns()
+        {
+            return new GQIColumn[]
+          {
+                new GQIStringColumn("ID"),
+                new GQIDoubleColumn("Sorting"),
+                new GQIDoubleColumn("Latitude"),
+                new GQIDoubleColumn("Longitude"),
+                new GQIDateTimeColumn("TimeStamp"),
+          };
+        }
+
+        public GQIPage GetNextPage(GetNextPageInputArgs args)
+        {
+            return new GQIPage(listGqiRows.ToArray())
+            {
+                HasNextPage = false,
+            };
+        }
+
+        private DateTime RoundToNearest5Min(DateTime time)
         {
             int minutes = (time.Minute / 5) * 5;  // Always round down
             return new DateTime(time.Year, time.Month, time.Day, time.Hour, minutes, 0);
@@ -112,7 +132,10 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
 
             foreach (var record in trendDataResponseMessage.Records)
             {
-                if (!record.Value.Any()) continue;
+                if (!record.Value.Any())
+                {
+                    continue;
+                }
 
                 if (record.Key.StartsWith("1213")) // latitude
                 {
@@ -129,14 +152,20 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
                     for (int i = 0; i < record.Value.Count; i++)
                     {
                         // sample the data 1 in 3.
-                        if (i % 3 > 0) continue;
+                        if (i % 3 > 0)
+                        {
+                            continue;
+                        }
 
                         if (record.Value[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == 5)
                         {
                             double longitude = avgTimeData.AverageValue;
                             double latitude = latitudeData[i];
 
-                            if (longitude == -1.0 || latitude == -1.0) continue;
+                            if (longitude == -1.0 || latitude == -1.0)
+                            {
+                                continue;
+                            }
 
                             AddResultRow(i, avgTimeData.Time, latitude, longitude);
                         }
@@ -159,49 +188,30 @@ namespace StarlinkGetHistoryGEOLocationsAVG5M_1
         private void AddResultRow(int index, DateTime timeStamp, double latitude, double longitude)
         {
             var gqiRow = new[]
-                                     {
-                         new GQICell
-                         {
-                             Value = Convert.ToString(index),
-                         },
-                         new GQICell
-                         {
-                             Value = Convert.ToDouble(index),
-                         },
-                         new GQICell
-                         {
-                             Value = latitude,
-                         },
-                         new GQICell
-                         {
-                             Value = longitude,
-                         },
-                         new GQICell
-                         {
-                             Value = timeStamp.ToUniversalTime(),
-                         },};
+            {
+                new GQICell
+                {
+                    Value = Convert.ToString(index),
+                },
+                new GQICell
+                {
+                    Value = Convert.ToDouble(index),
+                },
+                new GQICell
+                {
+                    Value = latitude,
+                },
+                new GQICell
+                {
+                    Value = longitude,
+                },
+                new GQICell
+                {
+                    Value = timeStamp.ToUniversalTime(),
+                },
+            };
 
             listGqiRows.Add(new GQIRow(gqiRow));
-        }
-
-        public GQIColumn[] GetColumns()
-        {
-            return new GQIColumn[]
-          {
-                new GQIStringColumn("ID"),
-                new GQIDoubleColumn("Sorting"),
-                new GQIDoubleColumn("Latitude"),
-                new GQIDoubleColumn("Longitude"),
-                new GQIDateTimeColumn("TimeStamp"),
-          };
-        }
-
-        public GQIPage GetNextPage(GetNextPageInputArgs args)
-        {
-            return new GQIPage(listGqiRows.ToArray())
-            {
-                HasNextPage = false,
-            };
         }
     }
 }

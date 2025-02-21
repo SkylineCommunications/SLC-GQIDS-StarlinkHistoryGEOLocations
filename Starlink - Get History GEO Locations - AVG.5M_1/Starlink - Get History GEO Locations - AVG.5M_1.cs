@@ -3,13 +3,10 @@ namespace DSStarlinkGeoHistoryLocations
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Linq.Expressions;
-    using System.Security.Cryptography;
     using Skyline.DataMiner.Analytics.GenericInterface;
     using Skyline.DataMiner.Net;
     using Skyline.DataMiner.Net.Messages;
     using Skyline.DataMiner.Net.Trending;
-    using SLDataGateway.API.Collections.Linq;
 
     /// <summary>
     /// Represents a data source.
@@ -20,6 +17,11 @@ namespace DSStarlinkGeoHistoryLocations
         , IGQIOnInit
         , IGQIInputArguments
     {
+        private const int ColumnParameterIdStarlinkEnterpriseLatitude = 1213;
+        private const int ColumnParameterIdStarlinkEnterpriseLongitude = 1214;
+        private const double ExceptionValueDoubleNA = -1.0;
+        private const int MaximumOfRecordsToSample = 1000; // Ensure max number of records in the response
+
         private readonly GQIStringArgument starlinkEnterpriseElementIdArg = new GQIStringArgument("Starlink Enterprise Element ID")
         {
             IsRequired = true,
@@ -42,8 +44,7 @@ namespace DSStarlinkGeoHistoryLocations
 
         private readonly List<GQIRow> listGqiRows = new List<GQIRow> { };
         private GQIDMS _dms;
-        private string starlinkEnterpriseElement = String.Empty;
-
+ 
         public OnInitOutputArgs OnInit(OnInitInputArgs args)
         {
             _dms = args.DMS;
@@ -67,14 +68,14 @@ namespace DSStarlinkGeoHistoryLocations
             var endtime = args.GetArgumentValue(timeSpanEndArgX);
 
             listGqiRows.Clear();
-            starlinkEnterpriseElement = args.GetArgumentValue(starlinkEnterpriseElementIdArg);
-            string userTerminalIdPk = args.GetArgumentValue(userTerminalDeviceIdArg);
+            var starlinkEnterpriseElement = args.GetArgumentValue(starlinkEnterpriseElementIdArg);
+            var userTerminalIdPk = args.GetArgumentValue(userTerminalDeviceIdArg);
 
             var dmsElementID = starlinkEnterpriseElement.Split('/');
             var dmaID = Convert.ToInt32(dmsElementID[0]);
             var elementID = Convert.ToInt32(dmsElementID[1]);
 
-            var parameterPairs = new ParameterIndexPair[] { new ParameterIndexPair(1213, userTerminalIdPk), new ParameterIndexPair(1214, userTerminalIdPk) };
+            var parameterPairs = new ParameterIndexPair[] { new ParameterIndexPair(ColumnParameterIdStarlinkEnterpriseLatitude, userTerminalIdPk), new ParameterIndexPair(ColumnParameterIdStarlinkEnterpriseLongitude, userTerminalIdPk) };
             GetTrendDataMessage trendMessage = new GetTrendDataMessage
             {
                 DataMinerID = dmaID,
@@ -130,8 +131,10 @@ namespace DSStarlinkGeoHistoryLocations
             // Dictionary to store Latitude and Longitude values by rounded timestamps
             var latitudeDict = new Dictionary<DateTime, double>();
             var longitudeDict = new Dictionary<DateTime, double>();
+            int trendRecordTypeOfInterest = 5; // Five Minute Trend records
 
             // Step 1: Collect Latitude Data
+            string latitudeMatch = Convert.ToString(ColumnParameterIdStarlinkEnterpriseLatitude);
             foreach (var record in trendDataResponseMessage.Records)
             {
                 if (!record.Value.Any())
@@ -139,11 +142,11 @@ namespace DSStarlinkGeoHistoryLocations
                     continue;
                 }
 
-                if (record.Key.StartsWith("1213")) // latitude
+                if (record.Key.StartsWith(latitudeMatch)) // latitude
                 {
                     foreach (var entry in record.Value)
                     {
-                        if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == 5)
+                        if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == trendRecordTypeOfInterest)
                         {
                             DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
                             latitudeDict[roundedTime] = avgTimeData.AverageValue;
@@ -153,6 +156,7 @@ namespace DSStarlinkGeoHistoryLocations
             }
 
             // Step 2: Collect Longitude Data
+            string longitudeMatch = Convert.ToString(ColumnParameterIdStarlinkEnterpriseLongitude);
             foreach (var record in trendDataResponseMessage.Records)
             {
                 if (!record.Value.Any())
@@ -160,13 +164,13 @@ namespace DSStarlinkGeoHistoryLocations
                     continue;
                 }
 
-                if (record.Key.StartsWith("1214")) // Longitude
+                if (record.Key.StartsWith(longitudeMatch)) // Longitude
                 {
-                    int samplingRate = (int)Math.Ceiling((double)record.Value.Count / 1000);  // Ensure max 1000 records
+                    int samplingRate = (int)Math.Ceiling((double)record.Value.Count / MaximumOfRecordsToSample);  // Ensure max number of records
 
                     for (int i = 0; i < record.Value.Count; i += samplingRate)
                     {
-                        if (record.Value[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == 5)
+                        if (record.Value[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == trendRecordTypeOfInterest)
                         {
                             DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
                             longitudeDict[roundedTime] = avgTimeData.AverageValue;
@@ -182,7 +186,7 @@ namespace DSStarlinkGeoHistoryLocations
                 double latitude = latitudeDict[time];
                 double longitude = longitudeDict[time];
 
-                if (latitude != -1.0 && longitude != -1.0) // Ensure valid data
+                if (latitude != ExceptionValueDoubleNA && longitude != ExceptionValueDoubleNA) // Ensure valid data
                 {
                     AddResultRow(index++, time, latitude, longitude);
                 }

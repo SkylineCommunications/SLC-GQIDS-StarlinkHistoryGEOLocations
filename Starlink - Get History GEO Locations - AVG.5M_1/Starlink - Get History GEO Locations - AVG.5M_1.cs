@@ -43,8 +43,15 @@ namespace DSStarlinkGeoHistoryLocations
         };
 
         private readonly List<GQIRow> listGqiRows = new List<GQIRow> { };
+
         private GQIDMS _dms;
- 
+
+        public static DateTime RoundToNearest5Min(DateTime time)
+        {
+            int minutes = (time.Minute / 5) * 5;  // Always round down
+            return new DateTime(time.Year, time.Month, time.Day, time.Hour, minutes, 0);
+        }
+
         public OnInitOutputArgs OnInit(OnInitInputArgs args)
         {
             _dms = args.DMS;
@@ -118,12 +125,6 @@ namespace DSStarlinkGeoHistoryLocations
             {
                 HasNextPage = false,
             };
-        }
-
-        private DateTime RoundToNearest5Min(DateTime time)
-        {
-            int minutes = (time.Minute / 5) * 5;  // Always round down
-            return new DateTime(time.Year, time.Month, time.Day, time.Hour, minutes, 0);
         }
 
         private void ProcessTrendResponseResult(GetTrendDataResponseMessage trendDataResponseMessage)

@@ -22,6 +22,7 @@ namespace DSStarlinkGeoHistoryLocations
 		private const int ColumnParameterIdStarlinkEnterpriseLongitude = 1214;
 		private const double ExceptionValueDoubleNA = -1.0;
 		private const int MaximumOfRecordsToSample = 1000; // Ensure max number of records in the response
+		private const int TrendRecordTypeOfInterest = 5; // Five Minute Trend records
 
 		private readonly GQIStringArgument starlinkEnterpriseElementIdArg = new GQIStringArgument("Starlink Enterprise Element ID")
 		{
@@ -128,12 +129,20 @@ namespace DSStarlinkGeoHistoryLocations
 			};
 		}
 
+		private static void ParseTrendDataAndStoreIt(Dictionary<DateTime, double> latitudeDict, TrendRecord entry)
+		{
+			if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == TrendRecordTypeOfInterest)
+			{
+				DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
+				latitudeDict[roundedTime] = avgTimeData.AverageValue;
+			}
+		}
+
 		private void ProcessTrendResponseResult(GetTrendDataResponseMessage trendDataResponseMessage)
 		{
 			// Dictionary to store Latitude and Longitude values by rounded timestamps
 			var latitudeDict = new Dictionary<DateTime, double>();
 			var longitudeDict = new Dictionary<DateTime, double>();
-			int trendRecordTypeOfInterest = 5; // Five Minute Trend records
 
 			string latitudeMatch = Convert.ToString(ColumnParameterIdStarlinkEnterpriseLatitude);
 			string longitudeMatch = Convert.ToString(ColumnParameterIdStarlinkEnterpriseLongitude);
@@ -149,11 +158,7 @@ namespace DSStarlinkGeoHistoryLocations
 				{ // Step 1: Collect Latitude Data
 					foreach (var entry in record.Value)
 					{
-						if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == trendRecordTypeOfInterest)
-						{
-							DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
-							latitudeDict[roundedTime] = avgTimeData.AverageValue;
-						}
+						ParseTrendDataAndStoreIt(latitudeDict, entry);
 					}
 				}
 				else if (record.Key.StartsWith(longitudeMatch)) // Longitude
@@ -162,11 +167,7 @@ namespace DSStarlinkGeoHistoryLocations
 
 					for (int i = 0; i < record.Value.Count; i += samplingRate)
 					{
-						if (record.Value[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == trendRecordTypeOfInterest)
-						{
-							DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
-							longitudeDict[roundedTime] = avgTimeData.AverageValue;
-						}
+						ParseTrendDataAndStoreIt(longitudeDict, record.Value[i]);
 					}
 				}
 				else

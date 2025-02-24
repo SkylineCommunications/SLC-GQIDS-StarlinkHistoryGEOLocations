@@ -1,7 +1,7 @@
-﻿// File: DSStarlinkGeoHistoryLocationsTests.cs
-// Description: Unit tests for DSStarlinkGeoHistoryLocations class.
+﻿#pragma warning disable SA1633 // File header is missing
 
 namespace DSStarlinkGeoHistoryLocations.Tests
+#pragma warning restore IDE0079 // Remove unnecessary suppression
 {
 	[TestClass]
 	public class DSStarlinkGeoHistoryLocationsTests

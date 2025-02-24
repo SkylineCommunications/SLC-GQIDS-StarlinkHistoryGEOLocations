@@ -1,4 +1,7 @@
-﻿namespace DSStarlinkGeoHistoryLocations.Tests
+﻿// File: DSStarlinkGeoHistoryLocationsTests.cs
+// Description: Unit tests for DSStarlinkGeoHistoryLocations class.
+
+namespace DSStarlinkGeoHistoryLocations.Tests
 {
 	[TestClass]
 	public class DSStarlinkGeoHistoryLocationsTests

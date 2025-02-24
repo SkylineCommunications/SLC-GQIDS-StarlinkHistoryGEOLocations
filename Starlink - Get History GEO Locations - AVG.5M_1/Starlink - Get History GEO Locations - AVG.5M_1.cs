@@ -129,12 +129,15 @@ namespace DSStarlinkGeoHistoryLocations
 			};
 		}
 
-		private static void ParseTrendDataAndStoreIt(Dictionary<DateTime, double> latitudeDict, TrendRecord entry)
+		private static void ParseTrendDataAndStoreIt(Dictionary<DateTime, double> locationDict, List<TrendRecord> entries, int samplingSkipRate = 1)
 		{
-			if (entry is AverageTrendRecord avgTimeData && avgTimeData.Status == TrendRecordTypeOfInterest)
+			for (int i = 0; i < entries.Count; i += samplingSkipRate)
 			{
-				DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
-				latitudeDict[roundedTime] = avgTimeData.AverageValue;
+				if (entries[i] is AverageTrendRecord avgTimeData && avgTimeData.Status == TrendRecordTypeOfInterest)
+				{
+					DateTime roundedTime = RoundToNearest5Min(avgTimeData.Time);
+					locationDict[roundedTime] = avgTimeData.AverageValue;
+				}
 			}
 		}
 
@@ -150,29 +153,22 @@ namespace DSStarlinkGeoHistoryLocations
 			foreach (var record in trendDataResponseMessage.Records)
 			{
 				if (!record.Value.Any())
-				{
+				{ // Skip if unexpectedly empty
 					continue;
 				}
 
 				if (record.Key.StartsWith(latitudeMatch)) // latitude
 				{ // Step 1: Collect Latitude Data
-					foreach (var entry in record.Value)
-					{
-						ParseTrendDataAndStoreIt(latitudeDict, entry);
-					}
+					ParseTrendDataAndStoreIt(latitudeDict, record.Value);
 				}
 				else if (record.Key.StartsWith(longitudeMatch)) // Longitude
 				{ // Step 2: Collect Longitude Data
 					int samplingRate = (int)Math.Ceiling((double)record.Value.Count / MaximumOfRecordsToSample);  // Ensure max number of records
-
-					for (int i = 0; i < record.Value.Count; i += samplingRate)
-					{
-						ParseTrendDataAndStoreIt(longitudeDict, record.Value[i]);
-					}
+					ParseTrendDataAndStoreIt(longitudeDict, record.Value, samplingSkipRate: samplingRate);
 				}
 				else
 				{
-					// do nothing: only 2 records are to be expected in this response. One colelction for Latitude and one for Longitude data arrays.
+					// do nothing: only 2 records are to be expected in this response. One collection for Latitude and one for Longitude data arrays.
 				}
 			}
 

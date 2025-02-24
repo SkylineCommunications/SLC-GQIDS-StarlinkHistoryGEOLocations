@@ -1,6 +1,4 @@
-﻿#pragma warning disable SA1633 // File header is missing
-
-namespace DSStarlinkGeoHistoryLocations.Tests
+﻿namespace DSStarlinkGeoHistoryLocations.Tests
 {
 	[TestClass]
 	public class DSStarlinkGeoHistoryLocationsTests
